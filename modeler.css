@@ -1,0 +1,172 @@
+* {
+  box-sizing: border-box;
+}
+
+body, html {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+#container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+#toolbar {
+  background: #f8f8f8;
+  border-bottom: 1px solid #ccc;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+#toolbar button {
+  padding: 8px 16px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#toolbar button:hover {
+  background: #f0f0f0;
+}
+
+#toolbar button:active {
+  background: #e0e0e0;
+}
+
+#canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#properties-panel {
+  width: 350px;
+  overflow: auto;
+  border-left: 1px solid #ccc;
+  background: #f8f8f8;
+}
+
+.bpp-properties-panel {
+  padding: 10px;
+}
+
+.io-section {
+  margin: 20px 0;
+  padding: 15px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.io-section h4 {
+  margin: 0 0 15px 0;
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+}
+
+.io-item {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.io-item input,
+.io-item select {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.io-item-id {
+  flex: 1;
+  min-width: 0;
+}
+
+.io-item-name {
+  flex: 1.5;
+  min-width: 0;
+}
+
+.io-item-type {
+  flex: 1;
+  min-width: 0;
+}
+
+.io-remove-btn {
+  padding: 6px 10px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.io-remove-btn:hover {
+  background: #c82333;
+}
+
+.io-add-btn {
+  padding: 8px 16px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.io-add-btn:hover {
+  background: #218838;
+}
+
+.no-selection {
+  padding: 20px;
+  text-align: center;
+  color: #999;
+  font-style: italic;
+}
+
+.error {
+  color: #d9534f;
+  padding: 10px;
+  background: #f2dede;
+  border: 1px solid #ebccd1;
+  border-radius: 4px;
+  margin: 10px;
+}
+
+.hidden {
+  display: none;
+}
+
+#file-input {
+  display: none;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: #ccc;
+  margin: 0 5px;
+}
