@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BPMN Modeler</title>
+  
+  <!-- bpmn-js styles -->
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/diagram-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/bpmn-js.css">
+  <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/bpmn-font/css/bpmn-embedded.css">
+  
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body, html {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    #container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    #content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #toolbar {
+      background: #f8f8f8;
+      border-bottom: 1px solid #ccc;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #toolbar button {
+      padding: 8px 16px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #toolbar button:hover {
+      background: #f0f0f0;
+    }
+
+    #toolbar button:active {
+      background: #e0e0e0;
+    }
+
+    #canvas {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #properties-panel {
+      width: 350px;
+      overflow: auto;
+      border-left: 1px solid #ccc;
+      background: #f8f8f8;
+    }
+
+    .bpp-properties-panel {
+      padding: 10px;
+    }
+
+    .io-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .io-section h4 {
+      margin: 0 0 15px 0;
+      font-size: 14px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .io-item {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+
+    .io-item input,
+    .io-item select {
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+
+    .io-item-id {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .io-item-name {
+      flex: 1.5;
+      min-width: 0;
+    }
+
+    .io-item-type {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .io-remove-btn {
+      padding: 6px 10px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .io-remove-btn:hover {
+      background: #c82333;
+    }
+
+    .io-add-btn {
+      padding: 8px 16px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 13px;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .io-add-btn:hover {
+      background: #218838;
+    }
+
+    .no-selection {
+      padding: 20px;
+      text-align: center;
+      color: #999;
+      font-style: italic;
+    }
+
+    .error {
+      color: #d9534f;
+      padding: 10px;
+      background: #f2dede;
+      border: 1px solid #ebccd1;
+      border-radius: 4px;
+      margin: 10px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .toolbar-separator {
+      width: 1px;
+      height: 24px;
+      background: #ccc;
+      margin: 0 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="toolbar">
+      <button id="new-diagram" title="Create new diagram">New</button>
+      <button id="open-diagram" title="Open BPMN file">Open</button>
+      <input type="file" id="file-input" accept=".bpmn,.xml">
+      <button id="save-diagram" title="Save as BPMN file">Save</button>
+      <button id="save-svg" title="Save as SVG">Save SVG</button>
+      <div class="toolbar-separator"></div>
+      <button id="zoom-in" title="Zoom in">+</button>
+      <button id="zoom-out" title="Zoom out">-</button>
+      <button id="zoom-reset" title="Reset zoom">Reset</button>
+      <div class="toolbar-separator"></div>
+      <button id="undo" title="Undo">Undo</button>
+      <button id="redo" title="Redo">Redo</button>
+    </div>
+    <div id="content">
+      <div id="canvas"></div>
+      <div id="properties-panel"></div>
+    </div>
+  </div>
+
+  <!-- bpmn-js library -->
+  <script src="https://unpkg.com/bpmn-js@17.11.1/dist/bpmn-modeler.development.js"></script>
+
+  <script>
+    // Initial BPMN diagram
+    const initialDiagram = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:xs="http://www.w3.org/2001/XMLSchema" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:itemDefinition id="_String" itemKind="Information" structureRef="xs:string" />
+  <bpmn:itemDefinition id="_Int" itemKind="Information" structureRef="xs:int" />
+  <bpmn:itemDefinition id="_Bool" itemKind="Information" structureRef="xs:boolean" />
+  <bpmn:itemDefinition id="_Decimal" itemKind="Information" structureRef="xs:decimal" />
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+        <dc:Bounds x="173" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
+    // Create modeler instance
+    const modeler = new BpmnJS({
+      container: '#canvas',
+      keyboard: {
+        bindTo: document
+      }
+    });
+
+    let currentElement = null;
+
+    // Load initial diagram
+    async function loadDiagram(xml) {
+      try {
+        await modeler.importXML(xml);
+        const canvas = modeler.get('canvas');
+        canvas.zoom('fit-viewport');
+        setupSelectionHandler();
+      } catch (err) {
+        console.error('Error loading diagram', err);
+        alert('Error loading diagram: ' + err.message);
+      }
+    }
+
+    function setupSelectionHandler() {
+      const eventBus = modeler.get('eventBus');
+      const selection = modeler.get('selection');
+      
+      eventBus.on('selection.changed', (event) => {
+        const element = event.newSelection[0];
+        currentElement = element;
+        updatePropertiesPanel(element);
+      });
+    }
+
+    function updatePropertiesPanel(element) {
+      const panel = document.getElementById('properties-panel');
+      
+      if (!element) {
+        panel.innerHTML = '<div class="no-selection">Select an element to edit properties</div>';
+        return;
+      }
+      
+      const bo = element.businessObject;
+      const type = bo.$type;
+      
+      // Handle different element types
+      if (isTask(element)) {
+        renderTaskProperties(element, panel);
+      } else if (isConnection(element)) {
+        renderConnectionProperties(element, panel);
+      } else if (isDataObject(element)) {
+        renderDataObjectProperties(element, panel);
+      } else if (isDataStore(element)) {
+        renderDataStoreProperties(element, panel);
+      } else {
+        renderGenericProperties(element, panel);
+      }
+    }
+
+    function isTask(element) {
+      return element && element.businessObject && 
+             (element.businessObject.$type === 'bpmn:Task' ||
+              element.businessObject.$type === 'bpmn:UserTask' ||
+              element.businessObject.$type === 'bpmn:ServiceTask' ||
+              element.businessObject.$type === 'bpmn:ScriptTask' ||
+              element.businessObject.$type === 'bpmn:ManualTask' ||
+              element.businessObject.$type === 'bpmn:BusinessRuleTask' ||
+              element.businessObject.$type === 'bpmn:SendTask' ||
+              element.businessObject.$type === 'bpmn:ReceiveTask');
+    }
+
+    function isConnection(element) {
+      return element && element.businessObject && 
+             (element.businessObject.$type === 'bpmn:SequenceFlow' ||
+              element.businessObject.$type === 'bpmn:MessageFlow' ||
+              element.businessObject.$type === 'bpmn:DataAssociation' ||
+              element.businessObject.$type === 'bpmn:DataInputAssociation' ||
+              element.businessObject.$type === 'bpmn:DataOutputAssociation');
+    }
+
+    function isDataObject(element) {
+      return element && element.businessObject && 
+             (element.businessObject.$type === 'bpmn:DataObjectReference' ||
+              element.businessObject.$type === 'bpmn:DataObject');
+    }
+
+    function isDataStore(element) {
+      return element && element.businessObject && 
+             (element.businessObject.$type === 'bpmn:DataStoreReference' ||
+              element.businessObject.$type === 'bpmn:DataStore');
+    }
+
+    function renderTaskProperties(element, panel) {
+      const bo = element.businessObject;
+      const type = bo.$type.split(':')[1];
+      const ioSpec = bo.ioSpecification || {};
+      const dataInputs = ioSpec.dataInputs || [];
+      const dataOutputs = ioSpec.dataOutputs || [];
+      
+      let html = `
+        <div class="bpp-properties-panel">
+          <h3 style="margin: 0 0 20px 0; font-size: 16px;">${bo.name || bo.id}</h3>
+          
+          <div class="io-section">
+            <h4>General</h4>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">ID:</label>
+              <input type="text" value="${bo.id}" onchange="updateElementProperty('id', this.value)" style="flex: 1;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Name:</label>
+              <input type="text" value="${bo.name || ''}" onchange="updateElementProperty('name', this.value)" style="flex: 1;">
+            </div>`;
+      
+      // Add type-specific task properties
+      if (type === 'ScriptTask') {
+        html += renderScriptTaskProperties(bo);
+      } else if (type === 'ServiceTask') {
+        html += renderServiceTaskProperties(bo);
+      } else if (type === 'SendTask') {
+        html += renderSendTaskProperties(bo);
+      } else if (type === 'ReceiveTask') {
+        html += renderReceiveTaskProperties(bo);
+      } else if (type === 'UserTask') {
+        html += renderUserTaskProperties(bo);
+      } else if (type === 'ManualTask') {
+        html += renderManualTaskProperties(bo);
+      } else if (type === 'BusinessRuleTask') {
+        html += renderBusinessRuleTaskProperties(bo);
+      }
+      
+      // Activity properties (common to all tasks)
+      html += renderActivityProperties(bo);
+      
+      // Documentation
+      html += renderDocumentationProperty(bo);
+      
+      html += `
+          </div>
+          
+          <div class="io-section">
+            <h4>Data Inputs</h4>
+            <div id="inputs-container"></div>
+            <button class="io-add-btn" onclick="addDataInput()">+ Add Input</button>
+          </div>
+          
+          <div class="io-section">
+            <h4>Data Outputs</h4>
+            <div id="outputs-container"></div>
+            <button class="io-add-btn" onclick="addDataOutput()">+ Add Output</button>
+          </div>
+        </div>
+      `;
+      
+      panel.innerHTML = html;
+      
+      renderDataInputs(dataInputs);
+      renderDataOutputs(dataOutputs);
+    }
+
+    function renderConnectionProperties(element, panel) {
+      const bo = element.businessObject;
+      const type = bo.$type.split(':')[1];
+      
+      let html = `
+        <div class="bpp-properties-panel">
+          <h3 style="margin: 0 0 20px 0; font-size: 16px;">${type}</h3>
+          
+          <div class="io-section">
+            <h4>General</h4>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">ID:</label>
+              <input type="text" value="${bo.id}" onchange="updateElementProperty('id', this.value)" style="flex: 1;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Name:</label>
+              <input type="text" value="${bo.name || ''}" onchange="updateElementProperty('name', this.value)" style="flex: 1;">
+            </div>
+            ${bo.sourceRef ? `
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">From:</label>
+              <input type="text" value="${bo.sourceRef.id}" readonly style="flex: 1; background: #f0f0f0;">
+            </div>
+            ` : ''}
+            ${bo.targetRef ? `
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">To:</label>
+              <input type="text" value="${bo.targetRef.id}" readonly style="flex: 1; background: #f0f0f0;">
+            </div>
+            ` : ''}`;
+      
+      // Sequence Flow specific properties
+      if (type === 'SequenceFlow') {
+        html += `
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Is Immediate:</label>
+              <input type="checkbox" ${bo.isImmediate ? 'checked' : ''} 
+                     onchange="updateElementProperty('isImmediate', this.checked)">
+            </div>`;
+      }
+      
+      // Message Flow specific properties
+      if (type === 'MessageFlow') {
+        html += `
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Message Ref:</label>
+              <input type="text" value="${bo.messageRef || ''}" 
+                     onchange="updateElementProperty('messageRef', this.value)" 
+                     style="flex: 1;" placeholder="Message ID">
+            </div>`;
+      }
+      
+      // Documentation
+      html += renderDocumentationProperty(bo);
+      html += `</div>`;
+      
+      // Condition for Sequence Flow
+      if (type === 'SequenceFlow') {
+        html += `
+          <div class="io-section">
+            <h4>Condition</h4>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Expression:</label>
+              <textarea onchange="updateCondition(this.value)" 
+                        style="flex: 1; min-height: 60px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px;"
+                        placeholder="Condition expression">${bo.conditionExpression?.body || ''}</textarea>
+            </div>
+          </div>`;
+      }
+      
+      html += `</div>`;
+      
+      panel.innerHTML = html;
+    }
+
+    function renderDataObjectProperties(element, panel) {
+      const bo = element.businessObject;
+      const type = bo.$type.split(':')[1];
+      
+      let html = `
+        <div class="bpp-properties-panel">
+          <h3 style="margin: 0 0 20px 0; font-size: 16px;">${type}</h3>
+          
+          <div class="io-section">
+            <h4>General</h4>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">ID:</label>
+              <input type="text" value="${bo.id}" onchange="updateElementProperty('id', this.value)" style="flex: 1;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Name:</label>
+              <input type="text" value="${bo.name || ''}" onchange="updateElementProperty('name', this.value)" style="flex: 1;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Item Subject Ref:</label>
+              <input type="text" value="${bo.itemSubjectRef || ''}" 
+                     onchange="updateElementProperty('itemSubjectRef', this.value)" 
+                     style="flex: 1;" placeholder="Type reference">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Is Collection:</label>
+              <input type="checkbox" ${bo.isCollection ? 'checked' : ''} 
+                     onchange="updateElementProperty('isCollection', this.checked)">
+            </div>`;
+      
+      if (bo.dataObjectRef) {
+        html += `
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Data Object Ref:</label>
+              <input type="text" value="${bo.dataObjectRef.id || ''}" readonly 
+                     style="flex: 1; background: #f0f0f0;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">State:</label>
+              <input type="text" value="${bo.dataObjectRef.state || ''}" 
+                     onchange="updateDataObjectState(this.value)" style="flex: 1;" placeholder="State name">
+            </div>`;
+      }
+      
+      html += renderDocumentationProperty(bo);
+      html += `
+          </div>
+        </div>
+      `;
+      
+      panel.innerHTML = html;
+    }
+
+    function renderDataStoreProperties(element, panel) {
+      const bo = element.businessObject;
+      const type = bo.$type.split(':')[1];
+      
+      let html = `
+        <div class="bpp-properties-panel">
+          <h3 style="margin: 0 0 20px 0; font-size: 16px;">${type}</h3>
+          
+          <div class="io-section">
+            <h4>General</h4>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">ID:</label>
+              <input type="text" value="${bo.id}" onchange="updateElementProperty('id', this.value)" style="flex: 1;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Name:</label>
+              <input type="text" value="${bo.name || ''}" onchange="updateElementProperty('name', this.value)" style="flex: 1;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Item Subject Ref:</label>
+              <input type="text" value="${bo.itemSubjectRef || ''}" 
+                     onchange="updateElementProperty('itemSubjectRef', this.value)" 
+                     style="flex: 1;" placeholder="Type reference">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Capacity:</label>
+              <input type="number" value="${bo.capacity || ''}" 
+                     onchange="updateElementProperty('capacity', parseInt(this.value) || undefined)" 
+                     style="flex: 1;" min="0" placeholder="Storage capacity">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Is Unlimited:</label>
+              <input type="checkbox" ${bo.isUnlimited !== false ? 'checked' : ''} 
+                     onchange="updateElementProperty('isUnlimited', this.checked)">
+            </div>`;
+      
+      if (bo.dataStoreRef) {
+        html += `
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Data Store Ref:</label>
+              <input type="text" value="${bo.dataStoreRef || ''}" readonly 
+                     style="flex: 1; background: #f0f0f0;">
+            </div>`;
+      }
+      
+      html += renderDocumentationProperty(bo);
+      html += `
+          </div>
+        </div>
+      `;
+      
+      panel.innerHTML = html;
+    }
+
+    function renderGenericProperties(element, panel) {
+      const bo = element.businessObject;
+      const type = bo.$type.split(':')[1];
+      
+      let html = `
+        <div class="bpp-properties-panel">
+          <h3 style="margin: 0 0 20px 0; font-size: 16px;">${type}</h3>
+          
+          <div class="io-section">
+            <h4>General</h4>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">ID:</label>
+              <input type="text" value="${bo.id}" onchange="updateElementProperty('id', this.value)" style="flex: 1;">
+            </div>
+            <div class="io-item">
+              <label style="flex: 0 0 100px;">Name:</label>
+              <input type="text" value="${bo.name || ''}" onchange="updateElementProperty('name', this.value)" style="flex: 1;">
+            </div>`;
+      
+      // Add type-specific properties based on XSD definitions
+      if (type === 'Process') {
+        html += renderProcessProperties(bo);
+      } else if (type === 'StartEvent') {
+        html += renderStartEventProperties(bo);
+      } else if (type === 'EndEvent') {
+        html += renderEndEventProperties(bo);
+      } else if (type === 'IntermediateCatchEvent' || type === 'IntermediateThrowEvent') {
+        html += renderIntermediateEventProperties(bo);
+      } else if (type === 'BoundaryEvent') {
+        html += renderBoundaryEventProperties(bo);
+      } else if (type === 'ExclusiveGateway' || type === 'InclusiveGateway') {
+        html += renderGatewayWithDefaultProperties(bo);
+      } else if (type === 'ComplexGateway') {
+        html += renderComplexGatewayProperties(bo);
+      } else if (type === 'EventBasedGateway') {
+        html += renderEventBasedGatewayProperties(bo);
+      } else if (type === 'ParallelGateway') {
+        html += renderParallelGatewayProperties(bo);
+      } else if (type === 'SubProcess') {
+        html += renderSubProcessProperties(bo);
+      } else if (type === 'AdHocSubProcess') {
+        html += renderAdHocSubProcessProperties(bo);
+      } else if (type === 'Transaction') {
+        html += renderTransactionProperties(bo);
+      } else if (type === 'CallActivity') {
+        html += renderCallActivityProperties(bo);
+      } else if (type === 'ScriptTask') {
+        html += renderScriptTaskProperties(bo);
+      } else if (type === 'ServiceTask') {
+        html += renderServiceTaskProperties(bo);
+      } else if (type === 'SendTask') {
+        html += renderSendTaskProperties(bo);
+      } else if (type === 'ReceiveTask') {
+        html += renderReceiveTaskProperties(bo);
+      } else if (type === 'UserTask') {
+        html += renderUserTaskProperties(bo);
+      } else if (type === 'ManualTask') {
+        html += renderManualTaskProperties(bo);
+      } else if (type === 'BusinessRuleTask') {
+        html += renderBusinessRuleTaskProperties(bo);
+      } else if (type === 'Lane') {
+        html += renderLaneProperties(bo);
+      } else if (type === 'Participant') {
+        html += renderParticipantProperties(bo);
+      } else if (type === 'TextAnnotation') {
+        html += renderTextAnnotationProperties(bo);
+      }
+      
+      // Common activity properties
+      if (isActivity(element)) {
+        html += renderActivityProperties(bo);
+      }
+      
+      // Documentation (common to all base elements)
+      html += renderDocumentationProperty(bo);
+      
+      html += `
+          </div>
+        </div>
+      `;
+      
+      panel.innerHTML = html;
+    }
+    
+    function isActivity(element) {
+      const type = element.businessObject.$type;
+      return type === 'bpmn:Task' || type === 'bpmn:UserTask' || 
+             type === 'bpmn:ServiceTask' || type === 'bpmn:ScriptTask' ||
+             type === 'bpmn:ManualTask' || type === 'bpmn:BusinessRuleTask' ||
+             type === 'bpmn:SendTask' || type === 'bpmn:ReceiveTask' ||
+             type === 'bpmn:SubProcess' || type === 'bpmn:AdHocSubProcess' ||
+             type === 'bpmn:Transaction' || type === 'bpmn:CallActivity';
+    }
+    
+    function renderProcessProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Process Type:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('processType', this.value)">
+            <option value="None" ${(bo.processType || 'None') === 'None' ? 'selected' : ''}>None</option>
+            <option value="Public" ${bo.processType === 'Public' ? 'selected' : ''}>Public</option>
+            <option value="Private" ${bo.processType === 'Private' ? 'selected' : ''}>Private</option>
+          </select>
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Is Closed:</label>
+          <input type="checkbox" ${bo.isClosed ? 'checked' : ''} 
+                 onchange="updateElementProperty('isClosed', this.checked)">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Is Executable:</label>
+          <input type="checkbox" ${bo.isExecutable ? 'checked' : ''} 
+                 onchange="updateElementProperty('isExecutable', this.checked)">
+        </div>
+      `;
+    }
+    
+    function renderStartEventProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Is Interrupting:</label>
+          <input type="checkbox" ${bo.isInterrupting !== false ? 'checked' : ''} 
+                 onchange="updateElementProperty('isInterrupting', this.checked)">
+        </div>
+      `;
+    }
+    
+    function renderEndEventProperties(bo) {
+      return `<!-- End Event has no specific properties beyond base event -->`;
+    }
+    
+    function renderIntermediateEventProperties(bo) {
+      return `<!-- Intermediate Event properties -->`;
+    }
+    
+    function renderBoundaryEventProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Cancel Activity:</label>
+          <input type="checkbox" ${bo.cancelActivity !== false ? 'checked' : ''} 
+                 onchange="updateElementProperty('cancelActivity', this.checked)">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Attached To:</label>
+          <input type="text" value="${bo.attachedToRef?.id || ''}" readonly 
+                 style="flex: 1; background: #f0f0f0;">
+        </div>
+      `;
+    }
+    
+    function renderGatewayWithDefaultProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Gateway Direction:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('gatewayDirection', this.value)">
+            <option value="Unspecified" ${(bo.gatewayDirection || 'Unspecified') === 'Unspecified' ? 'selected' : ''}>Unspecified</option>
+            <option value="Converging" ${bo.gatewayDirection === 'Converging' ? 'selected' : ''}>Converging</option>
+            <option value="Diverging" ${bo.gatewayDirection === 'Diverging' ? 'selected' : ''}>Diverging</option>
+            <option value="Mixed" ${bo.gatewayDirection === 'Mixed' ? 'selected' : ''}>Mixed</option>
+          </select>
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Default Flow:</label>
+          <input type="text" value="${bo.default?.id || ''}" 
+                 onchange="updateDefaultFlow(this.value)" style="flex: 1;" placeholder="Flow ID">
+        </div>
+      `;
+    }
+    
+    function renderComplexGatewayProperties(bo) {
+      let html = renderGatewayWithDefaultProperties(bo);
+      html += `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Activation Condition:</label>
+          <textarea onchange="updateActivationCondition(this.value)" 
+                    style="flex: 1; min-height: 60px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                    placeholder="Expression">${bo.activationCondition?.body || ''}</textarea>
+        </div>
+      `;
+      return html;
+    }
+    
+    function renderEventBasedGatewayProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Instantiate:</label>
+          <input type="checkbox" ${bo.instantiate ? 'checked' : ''} 
+                 onchange="updateElementProperty('instantiate', this.checked)">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Event Gateway Type:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('eventGatewayType', this.value)">
+            <option value="Exclusive" ${(bo.eventGatewayType || 'Exclusive') === 'Exclusive' ? 'selected' : ''}>Exclusive</option>
+            <option value="Parallel" ${bo.eventGatewayType === 'Parallel' ? 'selected' : ''}>Parallel</option>
+          </select>
+        </div>
+      `;
+    }
+    
+    function renderParallelGatewayProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Gateway Direction:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('gatewayDirection', this.value)">
+            <option value="Unspecified" ${(bo.gatewayDirection || 'Unspecified') === 'Unspecified' ? 'selected' : ''}>Unspecified</option>
+            <option value="Converging" ${bo.gatewayDirection === 'Converging' ? 'selected' : ''}>Converging</option>
+            <option value="Diverging" ${bo.gatewayDirection === 'Diverging' ? 'selected' : ''}>Diverging</option>
+            <option value="Mixed" ${bo.gatewayDirection === 'Mixed' ? 'selected' : ''}>Mixed</option>
+          </select>
+        </div>
+      `;
+    }
+    
+    function renderSubProcessProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Triggered By Event:</label>
+          <input type="checkbox" ${bo.triggeredByEvent ? 'checked' : ''} 
+                 onchange="updateElementProperty('triggeredByEvent', this.checked)">
+        </div>
+      `;
+    }
+    
+    function renderAdHocSubProcessProperties(bo) {
+      let html = renderSubProcessProperties(bo);
+      html += `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Cancel Remaining:</label>
+          <input type="checkbox" ${bo.cancelRemainingInstances !== false ? 'checked' : ''} 
+                 onchange="updateElementProperty('cancelRemainingInstances', this.checked)">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Ordering:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('ordering', this.value)">
+            <option value="Parallel" ${bo.ordering === 'Parallel' ? 'selected' : ''}>Parallel</option>
+            <option value="Sequential" ${bo.ordering === 'Sequential' ? 'selected' : ''}>Sequential</option>
+          </select>
+        </div>
+      `;
+      return html;
+    }
+    
+    function renderTransactionProperties(bo) {
+      let html = renderSubProcessProperties(bo);
+      html += `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Method:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('method', this.value)">
+            <option value="##Compensate" ${(bo.method || '##Compensate') === '##Compensate' ? 'selected' : ''}>Compensate</option>
+            <option value="##Image" ${bo.method === '##Image' ? 'selected' : ''}>Image</option>
+            <option value="##Store" ${bo.method === '##Store' ? 'selected' : ''}>Store</option>
+          </select>
+        </div>
+      `;
+      return html;
+    }
+    
+    function renderCallActivityProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Called Element:</label>
+          <input type="text" value="${bo.calledElement || ''}" 
+                 onchange="updateElementProperty('calledElement', this.value)" 
+                 style="flex: 1;" placeholder="Process ID">
+        </div>
+      `;
+    }
+    
+    function renderScriptTaskProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Script Format:</label>
+          <input type="text" value="${bo.scriptFormat || ''}" 
+                 onchange="updateElementProperty('scriptFormat', this.value)" 
+                 style="flex: 1;" placeholder="e.g., javascript">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Script:</label>
+          <textarea onchange="updateScript(this.value)" 
+                    style="flex: 1; min-height: 80px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px; font-family: monospace;" 
+                    placeholder="Script content">${bo.script || ''}</textarea>
+        </div>
+      `;
+    }
+    
+    function renderServiceTaskProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Implementation:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('implementation', this.value)">
+            <option value="##WebService" ${(bo.implementation || '##WebService') === '##WebService' ? 'selected' : ''}>Web Service</option>
+            <option value="##unspecified" ${bo.implementation === '##unspecified' ? 'selected' : ''}>Unspecified</option>
+          </select>
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Operation Ref:</label>
+          <input type="text" value="${bo.operationRef || ''}" 
+                 onchange="updateElementProperty('operationRef', this.value)" 
+                 style="flex: 1;" placeholder="Operation ID">
+        </div>
+      `;
+    }
+    
+    function renderSendTaskProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Implementation:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('implementation', this.value)">
+            <option value="##WebService" ${(bo.implementation || '##WebService') === '##WebService' ? 'selected' : ''}>Web Service</option>
+            <option value="##unspecified" ${bo.implementation === '##unspecified' ? 'selected' : ''}>Unspecified</option>
+          </select>
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Message Ref:</label>
+          <input type="text" value="${bo.messageRef || ''}" 
+                 onchange="updateElementProperty('messageRef', this.value)" 
+                 style="flex: 1;" placeholder="Message ID">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Operation Ref:</label>
+          <input type="text" value="${bo.operationRef || ''}" 
+                 onchange="updateElementProperty('operationRef', this.value)" 
+                 style="flex: 1;" placeholder="Operation ID">
+        </div>
+      `;
+    }
+    
+    function renderReceiveTaskProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Implementation:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('implementation', this.value)">
+            <option value="##WebService" ${(bo.implementation || '##WebService') === '##WebService' ? 'selected' : ''}>Web Service</option>
+            <option value="##unspecified" ${bo.implementation === '##unspecified' ? 'selected' : ''}>Unspecified</option>
+          </select>
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Instantiate:</label>
+          <input type="checkbox" ${bo.instantiate ? 'checked' : ''} 
+                 onchange="updateElementProperty('instantiate', this.checked)">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Message Ref:</label>
+          <input type="text" value="${bo.messageRef || ''}" 
+                 onchange="updateElementProperty('messageRef', this.value)" 
+                 style="flex: 1;" placeholder="Message ID">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Operation Ref:</label>
+          <input type="text" value="${bo.operationRef || ''}" 
+                 onchange="updateElementProperty('operationRef', this.value)" 
+                 style="flex: 1;" placeholder="Operation ID">
+        </div>
+      `;
+    }
+    
+    function renderUserTaskProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Implementation:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('implementation', this.value)">
+            <option value="##unspecified" ${(bo.implementation || '##unspecified') === '##unspecified' ? 'selected' : ''}>Unspecified</option>
+            <option value="##WebService" ${bo.implementation === '##WebService' ? 'selected' : ''}>Web Service</option>
+          </select>
+        </div>
+      `;
+    }
+    
+    function renderManualTaskProperties(bo) {
+      return `<!-- Manual Task has no specific properties beyond base task -->`;
+    }
+    
+    function renderBusinessRuleTaskProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Implementation:</label>
+          <select style="flex: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                  onchange="updateElementProperty('implementation', this.value)">
+            <option value="##unspecified" ${(bo.implementation || '##unspecified') === '##unspecified' ? 'selected' : ''}>Unspecified</option>
+            <option value="##WebService" ${bo.implementation === '##WebService' ? 'selected' : ''}>Web Service</option>
+          </select>
+        </div>
+      `;
+    }
+    
+    function renderActivityProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">For Compensation:</label>
+          <input type="checkbox" ${bo.isForCompensation ? 'checked' : ''} 
+                 onchange="updateElementProperty('isForCompensation', this.checked)">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Start Quantity:</label>
+          <input type="number" value="${bo.startQuantity || 1}" 
+                 onchange="updateElementProperty('startQuantity', parseInt(this.value) || 1)" 
+                 style="flex: 1;" min="0">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Completion Qty:</label>
+          <input type="number" value="${bo.completionQuantity || 1}" 
+                 onchange="updateElementProperty('completionQuantity', parseInt(this.value) || 1)" 
+                 style="flex: 1;" min="0">
+        </div>
+      `;
+    }
+    
+    function renderLaneProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Partition Element:</label>
+          <input type="text" value="${bo.partitionElementRef || ''}" 
+                 onchange="updateElementProperty('partitionElementRef', this.value)" 
+                 style="flex: 1;" placeholder="Element Ref">
+        </div>
+      `;
+    }
+    
+    function renderParticipantProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Process Ref:</label>
+          <input type="text" value="${bo.processRef || ''}" 
+                 onchange="updateElementProperty('processRef', this.value)" 
+                 style="flex: 1;" placeholder="Process ID">
+        </div>
+      `;
+    }
+    
+    function renderTextAnnotationProperties(bo) {
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Text Format:</label>
+          <input type="text" value="${bo.textFormat || 'text/plain'}" 
+                 onchange="updateElementProperty('textFormat', this.value)" 
+                 style="flex: 1;" placeholder="MIME type">
+        </div>
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Text:</label>
+          <textarea onchange="updateAnnotationText(this.value)" 
+                    style="flex: 1; min-height: 80px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                    placeholder="Annotation text">${bo.text?.body || bo.text || ''}</textarea>
+        </div>
+      `;
+    }
+    
+    function renderDocumentationProperty(bo) {
+      const docs = bo.documentation || [];
+      const docText = docs.length > 0 ? docs[0].text : '';
+      return `
+        <div class="io-item">
+          <label style="flex: 0 0 100px;">Documentation:</label>
+          <textarea onchange="updateDocumentation(this.value)" 
+                    style="flex: 1; min-height: 60px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px;" 
+                    placeholder="Element documentation">${docText || ''}</textarea>
+        </div>
+      `;
+    }
+
+    function updateElementProperty(property, value) {
+      if (!currentElement) return;
+      
+      const modeling = modeler.get('modeling');
+      const updates = {};
+      updates[property] = value;
+      
+      modeling.updateProperties(currentElement, updates);
+    }
+
+    function updateCondition(expression) {
+      if (!currentElement) return;
+      
+      const modeling = modeler.get('modeling');
+      const moddle = modeler.get('moddle');
+      const bo = currentElement.businessObject;
+      
+      if (expression && expression.trim()) {
+        const condition = moddle.create('bpmn:FormalExpression', {
+          body: expression
+        });
+        modeling.updateProperties(currentElement, {
+          conditionExpression: condition
+        });
+      } else {
+        modeling.updateProperties(currentElement, {
+          conditionExpression: undefined
+        });
+      }
+    }
+
+    function updateDataObjectState(state) {
+      if (!currentElement) return;
+      
+      const bo = currentElement.businessObject;
+      if (bo.dataObjectRef) {
+        bo.dataObjectRef.state = state || undefined;
+      }
+    }
+    
+    function updateDefaultFlow(flowId) {
+      if (!currentElement) return;
+      
+      const modeling = modeler.get('modeling');
+      const elementRegistry = modeler.get('elementRegistry');
+      
+      if (flowId && flowId.trim()) {
+        const flow = elementRegistry.get(flowId);
+        if (flow) {
+          modeling.updateProperties(currentElement, {
+            default: flow.businessObject
+          });
+        }
+      } else {
+        modeling.updateProperties(currentElement, {
+          default: undefined
+        });
+      }
+    }
+    
+    function updateActivationCondition(expression) {
+      if (!currentElement) return;
+      
+      const modeling = modeler.get('modeling');
+      const moddle = modeler.get('moddle');
+      
+      if (expression && expression.trim()) {
+        const condition = moddle.create('bpmn:Expression', {
+          body: expression
+        });
+        modeling.updateProperties(currentElement, {
+          activationCondition: condition
+        });
+      } else {
+        modeling.updateProperties(currentElement, {
+          activationCondition: undefined
+        });
+      }
+    }
+    
+    function updateScript(scriptContent) {
+      if (!currentElement) return;
+      
+      const bo = currentElement.businessObject;
+      bo.script = scriptContent || undefined;
+    }
+    
+    function updateAnnotationText(text) {
+      if (!currentElement) return;
+      
+      const bo = currentElement.businessObject;
+      if (!bo.text) {
+        bo.text = text;
+      } else if (typeof bo.text === 'object') {
+        bo.text.body = text;
+      } else {
+        bo.text = text;
+      }
+    }
+    
+    function updateDocumentation(text) {
+      if (!currentElement) return;
+      
+      const modeling = modeler.get('modeling');
+      const moddle = modeler.get('moddle');
+      const bo = currentElement.businessObject;
+      
+      if (text && text.trim()) {
+        const doc = moddle.create('bpmn:Documentation', {
+          text: text
+        });
+        bo.documentation = [doc];
+      } else {
+        bo.documentation = [];
+      }
+    }
+
+    function renderDataInputs(inputs) {
+      const container = document.getElementById('inputs-container');
+      container.innerHTML = inputs.map((input, index) => `
+        <div class="io-item">
+          <input class="io-item-id" type="text" value="${input.id}" 
+                 onchange="updateDataInput(${index}, 'id', this.value)" placeholder="ID">
+          <input class="io-item-name" type="text" value="${input.name || ''}" 
+                 onchange="updateDataInput(${index}, 'name', this.value)" placeholder="Name">
+          <select class="io-item-type" onchange="updateDataInput(${index}, 'type', this.value)">
+            ${getTypeOptions(input.itemSubjectRef)}
+          </select>
+          <button class="io-remove-btn" onclick="removeDataInput(${index})">×</button>
+        </div>
+      `).join('');
+    }
+
+    function renderDataOutputs(outputs) {
+      const container = document.getElementById('outputs-container');
+      container.innerHTML = outputs.map((output, index) => `
+        <div class="io-item">
+          <input class="io-item-id" type="text" value="${output.id}" 
+                 onchange="updateDataOutput(${index}, 'id', this.value)" placeholder="ID">
+          <input class="io-item-name" type="text" value="${output.name || ''}" 
+                 onchange="updateDataOutput(${index}, 'name', this.value)" placeholder="Name">
+          <select class="io-item-type" onchange="updateDataOutput(${index}, 'type', this.value)">
+            ${getTypeOptions(output.itemSubjectRef)}
+          </select>
+          <button class="io-remove-btn" onclick="removeDataOutput(${index})">×</button>
+        </div>
+      `).join('');
+    }
+
+    function getTypeOptions(selectedType) {
+      const types = ['_String', '_Int', '_Bool', '_Decimal'];
+      return types.map(type => 
+        `<option value="${type}" ${type === selectedType ? 'selected' : ''}>${type.replace('_', '')}</option>`
+      ).join('');
+    }
+
+    function addDataInput() {
+      if (!currentElement) return;
+      
+      const modeling = modeler.get('modeling');
+      const moddle = modeler.get('moddle');
+      const bo = currentElement.businessObject;
+      
+      if (!bo.ioSpecification) {
+        bo.ioSpecification = moddle.create('bpmn:InputOutputSpecification');
+        bo.ioSpecification.dataInputs = [];
+        bo.ioSpecification.dataOutputs = [];
+        bo.ioSpecification.inputSets = [moddle.create('bpmn:InputSet')];
+        bo.ioSpecification.outputSets = [moddle.create('bpmn:OutputSet')];
+      }
+      
+      const newInput = moddle.create('bpmn:DataInput', {
+        id: `${bo.id}.Input_${Date.now()}`,
+        name: 'NewInput',
+        itemSubjectRef: '_String'
+      });
+      
+      bo.ioSpecification.dataInputs.push(newInput);
+      bo.ioSpecification.inputSets[0].dataInputRefs = bo.ioSpecification.dataInputs;
+      
+      updatePropertiesPanel(currentElement);
+    }
+
+    function addDataOutput() {
+      if (!currentElement) return;
+      
+      const modeling = modeler.get('modeling');
+      const moddle = modeler.get('moddle');
+      const bo = currentElement.businessObject;
+      
+      if (!bo.ioSpecification) {
+        bo.ioSpecification = moddle.create('bpmn:InputOutputSpecification');
+        bo.ioSpecification.dataInputs = [];
+        bo.ioSpecification.dataOutputs = [];
+        bo.ioSpecification.inputSets = [moddle.create('bpmn:InputSet')];
+        bo.ioSpecification.outputSets = [moddle.create('bpmn:OutputSet')];
+      }
+      
+      const newOutput = moddle.create('bpmn:DataOutput', {
+        id: `${bo.id}.Output_${Date.now()}`,
+        name: 'NewOutput',
+        itemSubjectRef: '_String'
+      });
+      
+      bo.ioSpecification.dataOutputs.push(newOutput);
+      bo.ioSpecification.outputSets[0].dataOutputRefs = bo.ioSpecification.dataOutputs;
+      
+      updatePropertiesPanel(currentElement);
+    }
+
+    function updateDataInput(index, field, value) {
+      if (!currentElement || !currentElement.businessObject.ioSpecification) return;
+      
+      const input = currentElement.businessObject.ioSpecification.dataInputs[index];
+      if (field === 'type') {
+        input.itemSubjectRef = value;
+      } else {
+        input[field] = value;
+      }
+    }
+
+    function updateDataOutput(index, field, value) {
+      if (!currentElement || !currentElement.businessObject.ioSpecification) return;
+      
+      const output = currentElement.businessObject.ioSpecification.dataOutputs[index];
+      if (field === 'type') {
+        output.itemSubjectRef = value;
+      } else {
+        output[field] = value;
+      }
+    }
+
+    function removeDataInput(index) {
+      if (!currentElement || !currentElement.businessObject.ioSpecification) return;
+      
+      const bo = currentElement.businessObject;
+      bo.ioSpecification.dataInputs.splice(index, 1);
+      if (bo.ioSpecification.inputSets[0]) {
+        bo.ioSpecification.inputSets[0].dataInputRefs = bo.ioSpecification.dataInputs;
+      }
+      
+      updatePropertiesPanel(currentElement);
+    }
+
+    function removeDataOutput(index) {
+      if (!currentElement || !currentElement.businessObject.ioSpecification) return;
+      
+      const bo = currentElement.businessObject;
+      bo.ioSpecification.dataOutputs.splice(index, 1);
+      if (bo.ioSpecification.outputSets[0]) {
+        bo.ioSpecification.outputSets[0].dataOutputRefs = bo.ioSpecification.dataOutputs;
+      }
+      
+      updatePropertiesPanel(currentElement);
+    }
+
+    // Make functions globally accessible
+    window.addDataInput = addDataInput;
+    window.addDataOutput = addDataOutput;
+    window.updateDataInput = updateDataInput;
+    window.updateDataOutput = updateDataOutput;
+    window.removeDataInput = removeDataInput;
+    window.removeDataOutput = removeDataOutput;
+    window.updateElementProperty = updateElementProperty;
+    window.updateCondition = updateCondition;
+    window.updateDataObjectState = updateDataObjectState;
+    window.updateDefaultFlow = updateDefaultFlow;
+    window.updateActivationCondition = updateActivationCondition;
+    window.updateScript = updateScript;
+    window.updateAnnotationText = updateAnnotationText;
+    window.updateDocumentation = updateDocumentation;
+
+    // Initialize with empty diagram
+    loadDiagram(initialDiagram);
+
+    // New diagram
+    document.getElementById('new-diagram').addEventListener('click', () => {
+      if (confirm('Create a new diagram? Any unsaved changes will be lost.')) {
+        loadDiagram(initialDiagram);
+      }
+    });
+
+    // Open diagram
+    document.getElementById('open-diagram').addEventListener('click', () => {
+      document.getElementById('file-input').click();
+    });
+
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          loadDiagram(event.target.result);
+        };
+        reader.readAsText(file);
+      }
+      e.target.value = ''; // Reset input
+    });
+
+    // Save diagram
+    document.getElementById('save-diagram').addEventListener('click', async () => {
+      try {
+        const { xml } = await modeler.saveXML({ format: true });
+        downloadFile(xml, 'diagram.bpmn', 'application/bpmn');
+      } catch (err) {
+        console.error('Error saving diagram', err);
+        alert('Error saving diagram: ' + err.message);
+      }
+    });
+
+    // Save SVG
+    document.getElementById('save-svg').addEventListener('click', async () => {
+      try {
+        const { svg } = await modeler.saveSVG();
+        downloadFile(svg, 'diagram.svg', 'image/svg+xml');
+      } catch (err) {
+        console.error('Error saving SVG', err);
+        alert('Error saving SVG: ' + err.message);
+      }
+    });
+
+    // Zoom controls
+    document.getElementById('zoom-in').addEventListener('click', () => {
+      modeler.get('zoomScroll').stepZoom(1);
+    });
+
+    document.getElementById('zoom-out').addEventListener('click', () => {
+      modeler.get('zoomScroll').stepZoom(-1);
+    });
+
+    document.getElementById('zoom-reset').addEventListener('click', () => {
+      modeler.get('canvas').zoom('fit-viewport');
+    });
+
+    // Undo/Redo
+    document.getElementById('undo').addEventListener('click', () => {
+      modeler.get('commandStack').undo();
+    });
+
+    document.getElementById('redo').addEventListener('click', () => {
+      modeler.get('commandStack').redo();
+    });
+
+    // Helper function to download files
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Ctrl/Cmd + S: Save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('save-diagram').click();
+      }
+      // Ctrl/Cmd + O: Open
+      if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+        e.preventDefault();
+        document.getElementById('open-diagram').click();
+      }
+      // Ctrl/Cmd + Z: Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        modeler.get('commandStack').undo();
+      }
+      // Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y: Redo
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') || 
+          ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+        e.preventDefault();
+        modeler.get('commandStack').redo();
+      }
+    });
+
+    // Handle drag and drop
+    const container = document.getElementById('container');
+    
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    container.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const file = e.dataTransfer.files[0];
+      if (file && (file.name.endsWith('.bpmn') || file.name.endsWith('.xml'))) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          loadDiagram(event.target.result);
+        };
+        reader.readAsText(file);
+      }
+    });
+  </script>
+</body>
+</html>
